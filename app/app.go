@@ -115,16 +115,30 @@ func handleError(err error, message string) {
 	}
 }
 
-func channelsListByUsername(service *youtube.Service, part string, forUsername string) {
-	call := service.Channels.List(part)
-	call = call.ForUsername(forUsername)
+func getBroadcastID(service *youtube.Service, part string, forUsername string) string {
+	call := service.LiveBroadcasts.List(part)
+	call = call.Mine(true)
+
 	response, err := call.Do()
 	handleError(err, "")
-	fmt.Println(fmt.Sprintf("This channel's ID is %s. Its title is '%s', "+
-		"and it has %d views.",
-		response.Items[0].Id,
-		response.Items[0].Snippet.Title,
-		response.Items[0].Statistics.ViewCount))
+
+	fmt.Println(fmt.Sprintf("This broadcast's ID is %s. It's live chat ID is '%s', "+
+		"and it's description: %s.",
+		response.Items[1].Id,
+		response.Items[1].Snippet.LiveChatId,
+		response.Items[1].Snippet.Description))
+
+	return response.Items[1].Snippet.LiveChatId
+}
+
+func getMessages(service *youtube.Service, part string, chatID string) {
+	call := service.LiveChatMessages.List(chatID, part)
+	response, err := call.Do()
+	handleError(err, "")
+
+	for i := 0; i < len(response.Items); i++ {
+		fmt.Printf("Message: %s\n", response.Items[i].Snippet.TextMessageDetails.MessageText)
+	}
 }
 
 // Start runs all connecting and parsing process
@@ -146,7 +160,8 @@ func (a *Application) Start() {
 
 	handleError(err, "Error creating YouTube client")
 
-	channelsListByUsername(service, "snippet,contentDetails,statistics", "GoogleDevelopers")
+	chatID := getBroadcastID(service, "snippet", "Anton Fedyashov")
+	getMessages(service, "snippet", chatID)
 }
 
 // NewApplication constructs Application
