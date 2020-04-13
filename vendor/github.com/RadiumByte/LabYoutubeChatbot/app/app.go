@@ -11,18 +11,15 @@ type StreamServerClient interface {
 // Application is responsible for all logics and communicates with other layers
 type Application struct {
 	server StreamServerClient
-}
-
-// Start runs all connecting and parsing process
-func (a *Application) Start() {
-
+	errc   chan<- error
 }
 
 // NewApplication constructs Application
-func NewApplication(serverClient StreamServerClient) *Application {
+func NewApplication(serverClient StreamServerClient, errchannel chan<- error) *Application {
 	res := &Application{}
-	res.server = serverClient
 
-	res.Start()
+	res.server = serverClient
+	res.errc = errchannel
+
 	return res
 }

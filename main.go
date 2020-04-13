@@ -7,23 +7,14 @@ import (
 	"fmt"
 )
 
-func run(errc chan<- error) {
+func main() {
+	fmt.Println("YouTube Live Chatbot is preparing to start...")
+
 	serverClient, err := client.NewServerClient()
 	if err != nil {
-		errc <- err
+		fmt.Println(err)
 		return
 	}
 
-	application := app.NewApplication(serverClient, errc)
-}
-
-func main() {
-	fmt.Println("Youtube Live Chatbot is preparing to start...")
-
-	errc := make(chan error)
-	go run(errc)
-	if err := <-errc; err != nil {
-		fmt.Print("Error occured: ")
-		fmt.Println(err)
-	}
+	app.NewApplication(serverClient)
 }
