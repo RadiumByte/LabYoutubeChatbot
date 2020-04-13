@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"time"
 
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
@@ -131,14 +132,21 @@ func getBroadcastID(service *youtube.Service, part string, forUsername string) s
 	return response.Items[1].Snippet.LiveChatId
 }
 
-func getMessages(service *youtube.Service, part string, chatID string) {
+func getMessages(service *youtube.Service, part string, chatID string, pageToken string) string {
 	call := service.LiveChatMessages.List(chatID, part)
+
+	if pageToken != "" {
+		call.PageToken(pageToken)
+	}
+
 	response, err := call.Do()
 	handleError(err, "")
 
 	for i := 0; i < len(response.Items); i++ {
 		fmt.Printf("Message: %s\n", response.Items[i].Snippet.TextMessageDetails.MessageText)
 	}
+	fmt.Printf("Page token: %s\n", response.NextPageToken)
+	return response.NextPageToken
 }
 
 // Start runs all connecting and parsing process
@@ -161,7 +169,13 @@ func (a *Application) Start() {
 	handleError(err, "Error creating YouTube client")
 
 	chatID := getBroadcastID(service, "snippet", "Anton Fedyashov")
-	getMessages(service, "snippet", chatID)
+
+	pageToken := ""
+
+	for true {
+		pageToken = getMessages(service, "snippet", chatID, pageToken)
+		time.Sleep(5 * time.Second)
+	}
 }
 
 // NewApplication constructs Application
