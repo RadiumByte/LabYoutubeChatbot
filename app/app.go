@@ -24,6 +24,9 @@ type YouTubeChatbot interface {
 
 // StreamServerClient is an interface for calling Stream Server from chatbot
 type StreamServerClient interface {
+	GetCameras() error
+	GetActive() error
+	SelectCamera(name string)
 }
 
 // Application is responsible for all logics and communicates with other layers
@@ -125,14 +128,14 @@ func getBroadcastID(service *youtube.Service, part string, forUsername string) s
 
 	fmt.Println(fmt.Sprintf("This broadcast's ID is %s. It's live chat ID is '%s', "+
 		"and it's description: %s.",
-		response.Items[1].Id,
-		response.Items[1].Snippet.LiveChatId,
-		response.Items[1].Snippet.Description))
+		response.Items[0].Id,
+		response.Items[0].Snippet.LiveChatId,
+		response.Items[0].Snippet.Description))
 
-	return response.Items[1].Snippet.LiveChatId
+	return response.Items[0].Snippet.LiveChatId
 }
 
-func getMessages(service *youtube.Service, part string, chatID string, pageToken string) string {
+func getMessages(service *youtube.Service, part string, chatID string, pageToken string) (string, []*youtube.LiveChatMessage) {
 	call := service.LiveChatMessages.List(chatID, part)
 
 	if pageToken != "" {
@@ -146,7 +149,8 @@ func getMessages(service *youtube.Service, part string, chatID string, pageToken
 		fmt.Printf("Message: %s\n", response.Items[i].Snippet.TextMessageDetails.MessageText)
 	}
 	fmt.Printf("Page token: %s\n", response.NextPageToken)
-	return response.NextPageToken
+
+	return response.NextPageToken, response.Items
 }
 
 // Start runs all connecting and parsing process
@@ -172,8 +176,25 @@ func (a *Application) Start() {
 
 	pageToken := ""
 
+	var items []*youtube.LiveChatMessage
+
 	for true {
-		pageToken = getMessages(service, "snippet", chatID, pageToken)
+		pageToken, items = getMessages(service, "snippet", chatID, pageToken)
+
+		for i := len(items) - 1; i >= 0; i-- {
+			currentMessage := items[i].Snippet.TextMessageDetails.MessageText
+			if currentMessage == "Home" {
+				a.server.SelectCamera("Home RTSP camera")
+				break
+			} else if currentMessage == "Souz" {
+				a.server.SelectCamera("Test RTSP camera")
+				break
+			} else if currentMessage == "Corridor" {
+				a.server.SelectCamera("Corridor RTSP camera")
+				break
+			}
+		}
+
 		time.Sleep(5 * time.Second)
 	}
 }
