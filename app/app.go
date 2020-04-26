@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"golang.org/x/oauth2"
@@ -90,6 +91,7 @@ func tokenCacheFile() (string, error) {
 		return "", err
 	}
 	tokenCacheDir := filepath.Join(usr.HomeDir, ".credentials")
+	fmt.Println(tokenCacheDir)
 	os.MkdirAll(tokenCacheDir, 0700)
 	return filepath.Join(tokenCacheDir,
 		url.QueryEscape("youtube-go-quickstart.json")), err
@@ -119,7 +121,7 @@ func handleError(err error, message string) {
 	}
 }
 
-func getBroadcastID(service *youtube.Service, part string, forUsername string) string {
+func getBroadcastID(service *youtube.Service, part string) string {
 	call := service.LiveBroadcasts.List(part)
 	call = call.Mine(true)
 
@@ -153,6 +155,34 @@ func getMessages(service *youtube.Service, part string, chatID string, pageToken
 	return response.NextPageToken, response.Items
 }
 
+func sendMessage(service *youtube.Service, part string, chatID string, message string) {
+	toSend := &youtube.LiveChatMessage{
+		Snippet: &youtube.LiveChatMessageSnippet{
+			TextMessageDetails: &youtube.LiveChatTextMessageDetails{
+				MessageText: message,
+			},
+			LiveChatId: chatID,
+			Type:       "textMessageEvent",
+		},
+	}
+
+	call := service.LiveChatMessages.Insert(part, toSend)
+
+	response, err := call.Do()
+	fmt.Println(err)
+	fmt.Println(response)
+	handleError(err, "")
+}
+
+func getViewers(service *youtube.Service, part string) uint64 {
+	call := service.LiveBroadcasts.List(part)
+	call = call.Mine(true)
+
+	response, err := call.Do()
+	handleError(err, "")
+	return response.Items[0].Statistics.ConcurrentViewers
+}
+
 // Start runs all connecting and parsing process
 func (a *Application) Start() {
 	ctx := context.Background()
@@ -162,7 +192,7 @@ func (a *Application) Start() {
 		log.Fatalf("Unable to read client secret file: %v", err)
 	}
 
-	config, err := google.ConfigFromJSON(b, youtube.YoutubeReadonlyScope)
+	config, err := google.ConfigFromJSON(b, youtube.YoutubeScope)
 	if err != nil {
 		log.Fatalf("Unable to parse client secret file to config: %v", err)
 	}
@@ -172,26 +202,42 @@ func (a *Application) Start() {
 
 	handleError(err, "Error creating YouTube client")
 
-	chatID := getBroadcastID(service, "snippet", "Anton Fedyashov")
+	chatID := getBroadcastID(service, "snippet")
 
 	pageToken := ""
 
 	var items []*youtube.LiveChatMessage
 
+	var lastViewers uint64
+	var currentViewers uint64
+
+	lastViewers = 0
+	currentViewers = 0
+
 	for true {
+
+		lastViewers = currentViewers
+		currentViewers = getViewers(service, "statistics")
+
+		if currentViewers > lastViewers {
+			sendMessage(service, "snippet", chatID, "Добро пожаловать в чат Лаборатории ИИ и робототехники мехмата ЮФУ!")
+			sendMessage(service, "snippet", chatID, "Для управления камерами вы можете воспользоваться следующими командами:")
+			sendMessage(service, "snippet", chatID, "'Список камер'")
+			sendMessage(service, "snippet", chatID, "'Выбрать камеру <название>'")
+			sendMessage(service, "snippet", chatID, "'Активная камера'")
+		}
+
 		pageToken, items = getMessages(service, "snippet", chatID, pageToken)
 
 		for i := len(items) - 1; i >= 0; i-- {
 			currentMessage := items[i].Snippet.TextMessageDetails.MessageText
-			if currentMessage == "Home" {
-				a.server.SelectCamera("Home RTSP camera")
+			if currentMessage == "Список камер" {
+				a.server.GetCameras()
 				break
-			} else if currentMessage == "Souz" {
-				a.server.SelectCamera("Test RTSP camera")
-				break
-			} else if currentMessage == "Corridor" {
-				a.server.SelectCamera("Corridor RTSP camera")
-				break
+			} else if currentMessage == "Активная камера" {
+				a.server.GetActive()
+			} else if strings.Index(currentMessage, "Выбрать камеру") != -1 {
+
 			}
 		}
 

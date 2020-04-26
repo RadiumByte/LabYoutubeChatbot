@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/RadiumByte/LabYoutubeChatbot/app"
 	"github.com/valyala/fasthttp"
 )
 
@@ -22,7 +23,7 @@ type ServerClient struct {
 }
 
 // GetCameras receives list of all available cameras from Stream Server
-func (c *ServerClient) GetCameras() error {
+func (c *ServerClient) GetCameras() []app.CameraData {
 	c.Request.Header.SetMethod("GET")
 
 	url := "http://" + c.ServerIP + c.ServerPort + "/get-cameras"
@@ -32,7 +33,7 @@ func (c *ServerClient) GetCameras() error {
 
 	if err != nil {
 		fmt.Println("Client: GetCameras failed to make a request.")
-		return err
+		return nil
 	}
 
 	payload := c.Response.Body()
@@ -40,10 +41,24 @@ func (c *ServerClient) GetCameras() error {
 
 	if err := json.Unmarshal(payload, &dataJSON); err != nil {
 		fmt.Println("Client: Server returned bad data for GetCameras")
-		return err
+		return nil
 	}
 
-	return nil
+	var types []interface{}
+	var names []interface{}
+	var cameras []app.CameraData
+
+	types = dataJSON["types"].([]interface{})
+	names = dataJSON["names"].([]interface{})
+
+	for i := 0; i < len(types); i++ {
+		current := app.CameraData{
+			Name: names[i].(string),
+			Type: types[i].(int)}
+		cameras = append(cameras, current)
+	}
+
+	return cameras
 }
 
 // GetActive gets one active (broadcasting) camera at this moment
