@@ -54,7 +54,7 @@ func (c *ServerClient) GetCameras() []app.CameraData {
 	for i := 0; i < len(types); i++ {
 		current := app.CameraData{
 			Name: names[i].(string),
-			Type: types[i].(int)}
+			Type: int(types[i].(float64))}
 		cameras = append(cameras, current)
 	}
 
@@ -62,15 +62,33 @@ func (c *ServerClient) GetCameras() []app.CameraData {
 }
 
 // GetActive gets one active (broadcasting) camera at this moment
-func (c *ServerClient) GetActive() error {
+func (c *ServerClient) GetActive() app.CameraData {
 	c.Request.Header.SetMethod("GET")
 
 	url := "http://" + c.ServerIP + c.ServerPort + "/get-active"
 
 	c.Request.SetRequestURI(url)
-	c.Client.Do(c.Request, c.Response)
+	err := c.Client.Do(c.Request, c.Response)
 
-	return nil
+	if err != nil {
+		fmt.Println("Client: GetActive failed to make a request.")
+		return app.CameraData{}
+	}
+
+	payload := c.Response.Body()
+	var dataJSON map[string]interface{}
+
+	if err := json.Unmarshal(payload, &dataJSON); err != nil {
+		fmt.Println("Client: Server returned bad data for GetActive")
+		return app.CameraData{}
+	}
+
+	typeCam := int(dataJSON["type"].(float64))
+	nameCam := dataJSON["name"].(string)
+
+	return app.CameraData{
+		Name: nameCam,
+		Type: typeCam}
 }
 
 // SelectCamera makes specified camera active, switching the broadcast

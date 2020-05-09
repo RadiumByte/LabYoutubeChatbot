@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -25,8 +26,8 @@ type YouTubeChatbot interface {
 
 // StreamServerClient is an interface for calling Stream Server from chatbot
 type StreamServerClient interface {
-	GetCameras() error
-	GetActive() error
+	GetCameras() []CameraData
+	GetActive() CameraData
 	SelectCamera(name string)
 }
 
@@ -168,9 +169,9 @@ func sendMessage(service *youtube.Service, part string, chatID string, message s
 
 	call := service.LiveChatMessages.Insert(part, toSend)
 
-	response, err := call.Do()
-	fmt.Println(err)
-	fmt.Println(response)
+	_, err := call.Do()
+	//fmt.Println(err)
+	//fmt.Println(response)
 	handleError(err, "")
 }
 
@@ -192,7 +193,7 @@ func (a *Application) Start() {
 		log.Fatalf("Unable to read client secret file: %v", err)
 	}
 
-	config, err := google.ConfigFromJSON(b, youtube.YoutubeScope)
+	config, err := google.ConfigFromJSON(b, youtube.Scope)
 	if err != nil {
 		log.Fatalf("Unable to parse client secret file to config: %v", err)
 	}
@@ -206,38 +207,72 @@ func (a *Application) Start() {
 
 	pageToken := ""
 
+	var cameras []CameraData
+
 	var items []*youtube.LiveChatMessage
 
-	var lastViewers uint64
-	var currentViewers uint64
+	//var lastViewers uint64
+	//var currentViewers uint64
 
-	lastViewers = 0
-	currentViewers = 0
+	//lastViewers = 0
+	//currentViewers = 0
+
+	sendMessage(service, "snippet", chatID, "Добро пожаловать в чат Лаборатории ИИ и робототехники мехмата ЮФУ!")
+	sendMessage(service, "snippet", chatID, "Для управления камерами вы можете воспользоваться следующими командами:")
+	sendMessage(service, "snippet", chatID, "'Список камер'")
+	sendMessage(service, "snippet", chatID, "'Выбрать камеру <название>'")
+	sendMessage(service, "snippet", chatID, "'Активная камера'")
+
+	tmp := a.server.GetCameras()
+	if tmp != nil {
+		cameras = tmp
+	}
 
 	for true {
+		//lastViewers = currentViewers
+		//currentViewers = getViewers(service, "statistics")
 
-		lastViewers = currentViewers
-		currentViewers = getViewers(service, "statistics")
-
-		if currentViewers > lastViewers {
+		/*if currentViewers > lastViewers {
 			sendMessage(service, "snippet", chatID, "Добро пожаловать в чат Лаборатории ИИ и робототехники мехмата ЮФУ!")
 			sendMessage(service, "snippet", chatID, "Для управления камерами вы можете воспользоваться следующими командами:")
 			sendMessage(service, "snippet", chatID, "'Список камер'")
 			sendMessage(service, "snippet", chatID, "'Выбрать камеру <название>'")
 			sendMessage(service, "snippet", chatID, "'Активная камера'")
-		}
+		}*/
 
 		pageToken, items = getMessages(service, "snippet", chatID, pageToken)
 
 		for i := len(items) - 1; i >= 0; i-- {
 			currentMessage := items[i].Snippet.TextMessageDetails.MessageText
 			if currentMessage == "Список камер" {
-				a.server.GetCameras()
+				for i := 0; i < len(cameras); i++ {
+					message := strconv.Itoa(i+1) + ") " + cameras[i].Name + " ("
+					if cameras[i].Type == 1 {
+						message += "RTSP)"
+					} else {
+						message += "Webcam)"
+					}
+					sendMessage(service, "snippet", chatID, message)
+				}
 				break
 			} else if currentMessage == "Активная камера" {
-				a.server.GetActive()
+				cam := a.server.GetActive()
+				message := cam.Name + " ("
+				if cam.Type == 1 {
+					message += "RTSP)"
+				} else {
+					message += "Webcam)"
+				}
+				sendMessage(service, "snippet", chatID, message)
+				break
 			} else if strings.Index(currentMessage, "Выбрать камеру") != -1 {
-
+				for i := 0; i < len(cameras); i++ {
+					if strings.Index(currentMessage, cameras[i].Name) != -1 {
+						a.server.SelectCamera(cameras[i].Name)
+						break
+					}
+				}
+				break
 			}
 		}
 
