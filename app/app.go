@@ -29,6 +29,7 @@ type StreamServerClient interface {
 	GetCameras() []CameraData
 	GetActive() CameraData
 	SelectCamera(name string)
+	SendStreamURL(url string)
 }
 
 // Application is responsible for all logics and communicates with other layers
@@ -122,7 +123,7 @@ func handleError(err error, message string) {
 	}
 }
 
-func getBroadcastID(service *youtube.Service, part string) string {
+func getChatID(service *youtube.Service, part string) string {
 	call := service.LiveBroadcasts.List(part)
 	call = call.Mine(true)
 
@@ -136,6 +137,16 @@ func getBroadcastID(service *youtube.Service, part string) string {
 		response.Items[0].Snippet.Description))
 
 	return response.Items[0].Snippet.LiveChatId
+}
+
+func getBroadcastID(service *youtube.Service, part string) string {
+	call := service.LiveBroadcasts.List(part)
+	call = call.Mine(true)
+
+	response, err := call.Do()
+	handleError(err, "")
+
+	return response.Items[0].Id
 }
 
 func getMessages(service *youtube.Service, part string, chatID string, pageToken string) (string, []*youtube.LiveChatMessage) {
@@ -193,7 +204,7 @@ func (a *Application) Start() {
 		log.Fatalf("Unable to read client secret file: %v", err)
 	}
 
-	config, err := google.ConfigFromJSON(b, youtube.Scope)
+	config, err := google.ConfigFromJSON(b, youtube.YoutubeScope)
 	if err != nil {
 		log.Fatalf("Unable to parse client secret file to config: %v", err)
 	}
@@ -203,19 +214,16 @@ func (a *Application) Start() {
 
 	handleError(err, "Error creating YouTube client")
 
-	chatID := getBroadcastID(service, "snippet")
+	chatID := getChatID(service, "snippet")
+	streamURL := "https://youtu.be/" + getBroadcastID(service, "snippet")
+
+	a.server.SendStreamURL(streamURL)
 
 	pageToken := ""
 
 	var cameras []CameraData
 
 	var items []*youtube.LiveChatMessage
-
-	//var lastViewers uint64
-	//var currentViewers uint64
-
-	//lastViewers = 0
-	//currentViewers = 0
 
 	sendMessage(service, "snippet", chatID, "Добро пожаловать в чат Лаборатории ИИ и робототехники мехмата ЮФУ!")
 	sendMessage(service, "snippet", chatID, "Для управления камерами вы можете воспользоваться следующими командами:")
@@ -229,17 +237,6 @@ func (a *Application) Start() {
 	}
 
 	for true {
-		//lastViewers = currentViewers
-		//currentViewers = getViewers(service, "statistics")
-
-		/*if currentViewers > lastViewers {
-			sendMessage(service, "snippet", chatID, "Добро пожаловать в чат Лаборатории ИИ и робототехники мехмата ЮФУ!")
-			sendMessage(service, "snippet", chatID, "Для управления камерами вы можете воспользоваться следующими командами:")
-			sendMessage(service, "snippet", chatID, "'Список камер'")
-			sendMessage(service, "snippet", chatID, "'Выбрать камеру <название>'")
-			sendMessage(service, "snippet", chatID, "'Активная камера'")
-		}*/
-
 		pageToken, items = getMessages(service, "snippet", chatID, pageToken)
 
 		for i := len(items) - 1; i >= 0; i-- {

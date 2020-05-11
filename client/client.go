@@ -91,6 +91,18 @@ func (c *ServerClient) GetActive() app.CameraData {
 		Type: typeCam}
 }
 
+// SendStreamURL sends YouTube broadcast URL to the server
+func (c *ServerClient) SendStreamURL(streamURL string) {
+	c.Request.Header.SetMethod("POST")
+
+	url := "http://" + c.ServerIP + c.ServerPort + "/stream-url"
+	c.Request.SetRequestURI(url)
+
+	c.Request.SetBodyString(streamURL)
+
+	c.Client.Do(c.Request, c.Response)
+}
+
 // SelectCamera makes specified camera active, switching the broadcast
 func (c *ServerClient) SelectCamera(name string) {
 	c.Request.Header.SetMethod("POST")
