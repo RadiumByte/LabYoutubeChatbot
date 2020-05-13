@@ -146,6 +146,10 @@ func getBroadcastID(service *youtube.Service, part string) string {
 	response, err := call.Do()
 	handleError(err, "")
 
+	for i := 0; i < len(response.Items); i++ {
+		fmt.Printf("i = %d, ID = %s\n", i, response.Items[i].Id)
+	}
+
 	return response.Items[0].Id
 }
 
@@ -197,6 +201,7 @@ func getViewers(service *youtube.Service, part string) uint64 {
 
 // Start runs all connecting and parsing process
 func (a *Application) Start() {
+	// Create YouTube client
 	ctx := context.Background()
 
 	b, err := ioutil.ReadFile("client_secret.json")
@@ -214,15 +219,16 @@ func (a *Application) Start() {
 
 	handleError(err, "Error creating YouTube client")
 
+	// Get Live Chat ID
 	chatID := getChatID(service, "snippet")
-	streamURL := "https://youtu.be/" + getBroadcastID(service, "snippet")
 
+	// Get Broadcast ID and make clickable URL
+	streamURL := "https://youtu.be/" + getBroadcastID(service, "snippet")
 	a.server.SendStreamURL(streamURL)
 
 	pageToken := ""
 
 	var cameras []CameraData
-
 	var items []*youtube.LiveChatMessage
 
 	sendMessage(service, "snippet", chatID, "Добро пожаловать в чат Лаборатории ИИ и робототехники мехмата ЮФУ!")
@@ -241,28 +247,54 @@ func (a *Application) Start() {
 
 		for i := len(items) - 1; i >= 0; i-- {
 			currentMessage := items[i].Snippet.TextMessageDetails.MessageText
+
 			if currentMessage == "Список камер" {
-				for i := 0; i < len(cameras); i++ {
-					message := strconv.Itoa(i+1) + ") " + cameras[i].Name + " ("
-					if cameras[i].Type == 1 {
+				message := ""
+
+				tmp := a.server.GetCameras()
+				if tmp != nil {
+					cameras = tmp
+				}
+
+				if len(cameras) == 0 {
+					message = "Сейчас нет доступных камер."
+					sendMessage(service, "snippet", chatID, message)
+				} else {
+					for i := 0; i < len(cameras); i++ {
+						message = strconv.Itoa(i+1) + ") " + cameras[i].Name + " ("
+						if cameras[i].Type == 1 {
+							message += "RTSP)"
+						} else {
+							message += "Webcam)"
+						}
+						sendMessage(service, "snippet", chatID, message)
+					}
+					break
+				}
+
+			} else if currentMessage == "Активная камера" {
+				cam := a.server.GetActive()
+				message := ""
+
+				if cam.Name == "" {
+					message = "Сейчас ни одна камера не работает."
+					sendMessage(service, "snippet", chatID, message)
+				} else {
+					message = cam.Name + " ("
+					if cam.Type == 1 {
 						message += "RTSP)"
 					} else {
 						message += "Webcam)"
 					}
 					sendMessage(service, "snippet", chatID, message)
+					break
 				}
-				break
-			} else if currentMessage == "Активная камера" {
-				cam := a.server.GetActive()
-				message := cam.Name + " ("
-				if cam.Type == 1 {
-					message += "RTSP)"
-				} else {
-					message += "Webcam)"
-				}
-				sendMessage(service, "snippet", chatID, message)
-				break
+
 			} else if strings.Index(currentMessage, "Выбрать камеру") != -1 {
+				tmp := a.server.GetCameras()
+				if tmp != nil {
+					cameras = tmp
+				}
 				for i := 0; i < len(cameras); i++ {
 					if strings.Index(currentMessage, cameras[i].Name) != -1 {
 						a.server.SelectCamera(cameras[i].Name)
